@@ -244,11 +244,15 @@ One of the most critical aspects of the moteus firmware is how it handles asynch
 
 The firmware implements a **hierarchical interrupt system** with carefully managed priorities to separate time-critical operations from communication processing:
 
+*Key implementation: [`fw/bldc_servo.cc:642-660`](../../fw/bldc_servo.cc#L642-L660) - Interrupt priority setup*
+
 #### **Priority Level 0 (Highest) - PWM Timer Interrupt**
 - **Critical timing**: Handles PWM center-aligned interrupt for current sampling
 - **Ultra-low latency**: Samples motor currents at precise PWM timing (≤1.03μs window)
 - **Minimal processing**: Only ADC reads and triggers lower-priority processing
 - **Cannot be interrupted**: Guarantees deterministic current sampling timing
+
+*See: [`fw/bldc_servo.cc:643`](../../fw/bldc_servo.cc#L643) - Priority 0 interrupt setup*
 
 #### **Priority Level 6 (Lowest) - PendSV for Control Processing**
 - **Control loop execution**: Position/velocity/current PID processing 
@@ -268,17 +272,25 @@ The firmware implements a **hierarchical interrupt system** with carefully manag
 
 The control loop uses a **split-phase approach** to minimize critical section timing:
 
+*Critical timing constraint: [`fw/bldc_servo.cc:112`](../../fw/bldc_servo.cc#L112) - Current sampling window (1.03μs)*
+
 #### **Phase 1: High-Priority Timer ISR**
 1. **ADC triggering**: Samples 3-phase currents at PWM center
 2. **Minimal processing**: Only critical-timing operations  
 3. **PendSV trigger**: Schedules lower-priority processing
 4. **Fixed execution time**: Deterministic, sub-microsecond duration
 
+*See: [`fw/bldc_servo.cc:645-651`](../../fw/bldc_servo.cc#L645-L651) - Two-phase design explanation*
+
 #### **Phase 2: Lower-Priority PendSV ISR**
 1. **Control calculations**: PID loops, FOC transforms, trajectory planning
 2. **PWM updates**: Calculate new duty cycles
 3. **Telemetry preparation**: Queue status data for transmission
 4. **Interruptible**: GPIO/encoder interrupts can preempt
+
+*See: [`fw/bldc_servo.cc:923`](../../fw/bldc_servo.cc#L923) - `ISR_DoTimerLowerPriority()` implementation*
+
+*Implementation: [`fw/bldc_servo.cc:920-923`](../../fw/bldc_servo.cc#L920-L923) - PendSV handler entry point*
 
 ### Asynchronous Command Processing
 
@@ -293,15 +305,21 @@ Main Loop:
   multiplex_protocol.Poll()  // Protocol handling
 ```
 
+*See: [`fw/moteus.cc:314-320`](../../fw/moteus.cc#L314-L320) - Main polling loop implementation*
+
 - **No CAN interrupts**: CAN reception uses polling to avoid timing disruption
 - **Hardware buffering**: STM32G4 FDCAN peripheral buffers incoming messages
 - **Cooperative processing**: Commands processed during non-critical time slots
+
+*CAN polling implementation: [`fw/fdcan_micro_server.h:81-91`](../../fw/fdcan_micro_server.h#L81-L91) - Non-blocking CAN reception*
 
 #### **Thread-Safe Parameter Updates**
 - **Atomic operations**: Configuration changes use atomic reads/writes where possible
 - **Interrupt disabling**: Critical parameter updates disable interrupts briefly
 - **Deferred validation**: Parameter validation occurs outside control loop
 - **Safe state transitions**: Mode changes only allowed at specific control phases
+
+*Critical section example: [`fw/bldc_servo.cc:596`](../../fw/bldc_servo.cc#L596) - Interrupt disabling for parameter updates*
 
 ### Telemetry Streaming
 
@@ -330,6 +348,8 @@ High-frequency telemetry is handled through **queued, non-blocking transmission*
 - **Bounded execution times**: Critical sections have maximum time guarantees
 - **No dynamic allocation**: All memory statically allocated in critical paths
 - **Watchdog protection**: Multiple layers detect and recover from timing violations
+
+*Timing validation: [`fw/moteus.cc:325-330`](../fw/moteus.cc#L325-L330) - Main loop timing fault detection*
 
 #### **Fault Tolerance**
 - **Communication timeouts**: Position mode times out to safety mode if commands stop
