@@ -28,6 +28,8 @@ The top-level orchestrator that initializes and coordinates all subsystems:
 - **Configuration management**: Handles persistent parameter storage and validation
 - **Safety coordination**: Orchestrates fault detection and recovery across subsystems
 
+*Key files: [`fw/moteus_controller.h:32`](../../fw/moteus_controller.h#L32) - Class definition, [`fw/moteus_controller.cc:44`](../../fw/moteus_controller.cc#L44) - Register map version*
+
 ```
 MoteusController
 ├── BldcServo (motor control)
@@ -44,6 +46,9 @@ The core motor control logic implementing field-oriented control:
 - **Safety systems**: Current limiting, thermal protection, position bounds checking
 - **Calibration routines**: Automatic motor parameter identification and encoder calibration
 
+*Class definition: [`fw/bldc_servo.h:41`](../../fw/bldc_servo.h#L41) - BldcServo interface*
+*Control structures: [`fw/bldc_servo.h:89-100`](../../fw/bldc_servo.h#L89-L100) - Control output data*
+
 ### MotorPosition (`fw/motor_position.h`)
 Multi-source position feedback system supporting:
 - **Magnetic encoders**: AS5047, MA732, CUI AMT21/22, IC-PZ, AKSiM-2
@@ -52,12 +57,18 @@ Multi-source position feedback system supporting:
 - **Sensor fusion**: Combining multiple position sources with PLL filtering
 - **Calibration**: Automatic compensation for encoder nonlinearity
 
+*Class definition: [`fw/motor_position.h:35`](../../fw/motor_position.h#L35) - MotorPosition interface*
+*Encoder types: [`fw/motor_position.h:43-55`](../../fw/motor_position.h#L43-L55) - Supported encoder types*
+
 ### FDCan (`fw/fdcan.h/.cc`)
 High-speed CAN-FD communication interface:
 - **Hardware abstraction**: STM32G4 FDCAN peripheral driver
 - **Protocol implementation**: Binary protocol with efficient data packing
 - **Real-time constraints**: Interrupt-driven transmission with deterministic timing
 - **Error handling**: Comprehensive CAN error detection and recovery
+
+*Class definition: [`fw/fdcan.h:25`](../../fw/fdcan.h#L25) - FDCan interface*
+*Configuration: [`fw/fdcan.h:70-95`](../../fw/fdcan.h#L70-L95) - CAN options and bitrate setup*
 
 ### Hardware Abstraction Layer
 Target-specific drivers and hardware interfaces:
@@ -98,6 +109,8 @@ torque = position_integrator +
          command_torque_feedforward
 ```
 
+*Control law implementation: Search for "torque = position_integrator" in [`fw/bldc_servo.cc`](../../fw/bldc_servo.cc) for the complete PID implementation*
+
 #### 3. Current Controller (Inner Loop)
 High-bandwidth PI controller for D/Q axis currents:
 - **Field-oriented control**: Separate control of flux (D) and torque (Q) producing currents
@@ -109,12 +122,17 @@ Control law:
 voltage = current_integrator + kp * current_error
 ```
 
+*Current controller implementation: [`fw/simple_pi.h`](../../fw/simple_pi.h) - PI controller used for current loops*
+
 ### Field-Oriented Control Implementation
 
 #### Clarke/Park Transforms (`fw/foc.h`)
 - **Hardware acceleration**: Uses STM32G4 CORDIC unit for sin/cos calculations
 - **DQ transformation**: Converts 3-phase measurements to rotating reference frame
 - **Inverse transforms**: Converts DQ voltage commands back to 3-phase PWM
+
+*FOC transforms: [`fw/foc.h:78-91`](../../fw/foc.h#L78-L91) - DQ transformation implementation*
+*CORDIC acceleration: [`fw/foc.h:34-75`](../../fw/foc.h#L34-L75) - Hardware-accelerated sin/cos*
 
 #### Current Sampling and PWM Synchronization
 - **Center-aligned PWM**: Ensures optimal current sampling timing
@@ -131,6 +149,8 @@ The firmware supports a comprehensive set of operating modes for different appli
 - **kCurrent**: Direct D/Q current control bypassing outer loops
 - **kVoltage/kVoltageFoc/kVoltageDq**: Direct voltage control modes
 - **kPwm**: Direct PWM control for testing and low-level access
+
+*Operating modes: [`fw/bldc_servo_structs.h:42-111`](../../fw/bldc_servo_structs.h#L42-L111) - Complete mode enumeration*
 
 ### Specialized Modes  
 - **kZeroVelocity**: Derivative-only control for smooth stopping
@@ -152,6 +172,9 @@ The firmware supports a comprehensive set of operating modes for different appli
 - **Register map**: Versioned register-based interface for commands and configuration
 - **Streaming telemetry**: High-frequency telemetry streaming for real-time monitoring
 
+*Protocol implementation: [`fw/fdcan_micro_server.h:23`](../../fw/fdcan_micro_server.h#L23) - CAN-FD protocol server*
+*Scaling functions: [`fw/moteus_controller.cc:86-127`](../../fw/moteus_controller.cc#L86-L127) - Variable precision encoding*
+
 ### Multiplex Protocol Support
 - **Multi-device coordination**: Synchronous control of multiple moteus controllers
 - **Efficient bus utilization**: Batched commands to minimize CAN bus overhead
@@ -161,6 +184,8 @@ The firmware supports a comprehensive set of operating modes for different appli
 - **Hierarchical organization**: Logical grouping of parameters (motor, servo, system, etc.)
 - **Automatic scaling**: Transparent conversion between internal float and wire formats
 - **Version management**: Protocol versioning for backward compatibility
+
+*Register map version: [`fw/moteus_controller.cc:44`](../../fw/moteus_controller.cc#L44) - Protocol versioning*
 
 ## Data Flow and Timing
 
@@ -197,11 +222,15 @@ CAN TX Queue ← Telemetry Formatting ← Status Update
 - **Current measurement**: Dedicated ADC channels for 3-phase current sensing
 - **Auxiliary measurements**: Voltage, temperature, and auxiliary sensor inputs
 
+*ADC interface: [`fw/stm32g4_adc.h:25`](../../fw/stm32g4_adc.h#L25) - STM32G4 ADC driver*
+
 ### Motor Driver Interface (`fw/drv8323.h/.cc`)
 - **SPI configuration**: Real-time configuration of DRV8323 gate driver parameters
 - **Fault monitoring**: Hardware fault detection and reporting from gate driver
 - **Current shunt amplification**: Configurable current measurement gain settings
 - **Protection features**: Gate driver integrated protection (overcurrent, thermal, etc.)
+
+*Motor driver class: [`fw/drv8323.h:34`](../../fw/drv8323.h#L34) - DRV8323 gate driver interface*
 
 ### Auxiliary Port System (`fw/aux_port.h`)
 Configurable hardware interfaces for sensors and external devices:
@@ -209,6 +238,8 @@ Configurable hardware interfaces for sensors and external devices:
 - **Encoder interfaces**: Direct support for multiple encoder protocols
 - **Sensor integration**: Temperature sensors, auxiliary feedback devices
 - **Debug interfaces**: Logic analyzer outputs, debugging signals
+
+*Auxiliary port class: [`fw/aux_port.h:47`](../../fw/aux_port.h#L47) - Configurable I/O interface*
 
 ### Peripheral Management
 - **Clock configuration**: Optimized clock tree for maximum performance
